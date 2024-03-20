@@ -18,6 +18,9 @@ class ProductRepository(Repository):
     def get_by_id(self, _id):
         return self.collection.find_one({"id": _id})
 
+    def get_by_user(self, user):
+        return list(self.collection.find({"buyer": user}).sort("buy_time", 1))
+
     def add(self, product):
         return self.collection.insert_one(product)
 
