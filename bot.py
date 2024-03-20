@@ -85,7 +85,7 @@ def user(_, msg):
             add_time = user['add_time'].strftime("%m-%d-%y %H:%M")
 
             msg.reply_text(
-                f"id: `{user['id']}`\nname: {user['name']}\nusername: {user['username']}\ncount of products: {len(products)}\nadd time: {add_time}",
+                f"id: `{user['id']}`\nname: {user['name']}\nusername: {user['username']}\nbalance: {user['balance']}грн\ncount of products: {len(products)}\nadd time: {add_time}",
                 parse_mode=ParseMode.MARKDOWN)
 
             for product in products:
@@ -163,7 +163,7 @@ def start(_, msg):
                     {
                         "id": msg.from_user.id,
                         "name": msg.from_user.first_name,
-                        "username": msg.from_user.username,
+                        "username": "@" + msg.from_user.username,
                         "add_time": datetime.now(),
                         "visible": False
                     }
@@ -180,7 +180,7 @@ def area(_, msg):
 
         if msg.chat.id == BOT_ADMIN_ID:
             area = int(msg.text.split()[1])
-            products = list(products_db.find({"area": area}))
+            products = list(products_db.find({"area": area, "visible": True}))
 
             if len(products) > 0:
                 products_weight = []
@@ -307,6 +307,28 @@ def me(_, msg):
                 msg.reply_text(
                     f"`id{product['id']}` Шиш {product['weight']}г {area['name']} - {product['photo']}\n\n{product['buy_time'].strftime("%m-%d-%y %H:%M")}",
                     parse_mode=ParseMode.MARKDOWN)
+
+    except Exception as ex:
+        logging.error(ex)
+
+
+
+@app.on_message(filters.command("balance", prefixes="/"))
+def balance(_, msg):
+    try:
+        logging.info(msg)
+
+        if msg.chat.id == BOT_ADMIN_ID:
+            amount = int(msg.text.split()[1])
+            user_id = int(msg.text.split()[2])
+
+            user = users_db.find_one({"id": user_id})
+            users_db.update_one({"id": user_id}, {"$set": {"balance": user['balance'] + amount}})
+            user = users_db.find_one({"id": user_id})
+
+            msg.reply_text(
+                f"id: `{user['id']}`\nname: {user['name']}\nusername: {user['username']}\nbalance: {user['balance']}грн",
+                parse_mode=ParseMode.MARKDOWN)
 
     except Exception as ex:
         logging.error(ex)
