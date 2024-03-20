@@ -1,18 +1,15 @@
 import os
-from pyrogram import Client, filters
+import telebot
 from dotenv import load_dotenv
-from pyrogram.enums import ParseMode
 import logging
 import pymongo
 
-
 load_dotenv()
-TELEGRAM_SESSION = os.getenv("TELEGRAM_SESSION")
-TELEGRAM_API_ID = os.getenv("TELEGRAM_API_ID")
-TELEGRAM_API_HASH = os.getenv("TELEGRAM_API_HASH")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+BOT_ADMIN_ID = int(os.getenv("BOT_ADMIN_ID"))
 PAYMENT_CARD = os.getenv("PAYMENT_CARD")
 
-app = Client(TELEGRAM_SESSION, api_id=TELEGRAM_API_ID, api_hash=TELEGRAM_API_HASH)
+bot = telebot.TeleBot(BOT_TOKEN)
 
 logging.basicConfig(filename="logs/bot.log", level=logging.INFO)
 
@@ -22,41 +19,35 @@ db = connection["shop"]
 users_db = db["users"]
 areas_db = db["areas"]
 products_db = db["products"]
-@app.on_message(filters.command("start", prefixes="/"))
-def start(_, msg):
+
+
+@bot.message_handler(commands=["start"])
+def start_message(message):
+    logging.info(message)
     try:
-        logging.info(msg)
-
-        user = users_db.find_one({"id": msg.chat.id})
-
-        if user:
-            msg.reply_text("Ваш статус: Whitelist")
-
-            areas = areas_db.find()
+        if message.chat.id == BOT_ADMIN_ID:
+            areas = areas_db.find({"visible": True})
 
             if areas:
-                text = "Выберите подходящий район Киева"
+                text = "Доступные районы"
                 for area in areas:
                     text = text + f"\n`/area {area['id']}` - {area['name']}"
 
-                msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+                bot.send_message(message.chat.id, text, parse_mode="Markdown")
 
             else:
-                msg.reply_text("No areas")
+                bot.send_message(message.chat.id, "No areas")
 
     except Exception as ex:
         logging.error(ex)
 
 
-@app.on_message(filters.command("area", prefixes="/"))
-def area(_, msg):
+@bot.message_handler(commands=["area"])
+def area_message(message):
+    logging.info(message)
     try:
-        logging.info(msg)
-
-        user = users_db.find_one({"id": msg.chat.id})
-
-        if user:
-            area = msg.text.split()[1]
+        if message.chat.id == BOT_ADMIN_ID:
+            area = int(message.text.split()[1])
             products = products_db.find({"area": area})
 
             products_weight = []
@@ -66,58 +57,72 @@ def area(_, msg):
 
             products_weight = set(products_weight)
 
-            text = "Выберите подходящий район Киева"
+            text = "Доступные товары"
 
             for weight in products_weight:
-                text = text + f"\n`/product {weight} {area}` - {weight}г"
+                text += f"\n`/product {area} {weight}` - Шиш {weight}г"
 
-            msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
-
-    except Exception as ex:
-        logging.error(ex)
-
-
-@app.on_message(filters.command("product", prefixes="/"))
-def product(_, msg):
-    try:
-        logging.info(msg)
-
-        user = users_db.find_one({"id": msg.chat.id})
-
-        if user:
-            weight = msg.text.split()[1]
-            area = msg.text.split()[2]
-            product = products_db.find_one({"weight": weight, "area": area})
-
-            msg.reply_text(f"Шиш {product['weight']}г\nРайон: {product['area']}\nЦена: {product['price']}")
-            msg.reply_text(f"Оплатите `{product['price']}`грн на карту `{PAYMENT_CARD}` в течение 20 минут", parse_mode=ParseMode.MARKDOWN)
+            bot.send_message(message.chat.id, text, parse_mode="Markdown")
 
     except Exception as ex:
         logging.error(ex)
 
 
-@app.on_message(filters.command("me", prefixes="/"))
-def me(_, msg):
+@bot.message_handler(commands=["product"])
+def product_message(message):
+    logging.info(message)
     try:
-        logging.info(msg)
+        if message.chat.id == BOT_ADMIN_ID:
+            area = int(message.text.split()[1])
+            weight = int(message.text.split()[2])
+            products = products_db.find({"weight": weight, "area": area, "visible": True})
 
-        user = users_db.find_one({"id": msg.chat.id})
+            for product in products:
+                area = areas_db.find_one({"id": product['area']})
+                bot.send_message(message.chat.id,
+                             f"Шиш {product['weight']}г {area['name']} {product['price']}грн\n{product['photo']}")
 
-        if user:
-            msg.reply_text(f"Привет, {user['name']}\nТвой айди: `{user['id']}`",
-                           parse_mode=ParseMode.MARKDOWN)
+    except Exception as ex:
+        logging.error(ex)
 
-            products = products_db.find({"buyer": user["id"]}).sort("buy_time", 1)
+
+@bot.message_handler(commands=["users"])
+def users_message(message):
+    logging.info(message)
+    try:
+        if message.chat.id == BOT_ADMIN_ID:
+            users = users_db.find({"visible": True})
+
+            text = "Whitelist"
+
+            for user in users:
+                text += f"\n`/user {user['id']}` - {user['username']}"
+
+            bot.send_message(message.chat.id, text, parse_mode="Markdown")
+
+    except Exception as ex:
+        logging.error(ex)
+
+
+@bot.message_handler(commands=["user"])
+def user_message(message):
+    logging.info(message)
+    try:
+        if message.chat.id == BOT_ADMIN_ID:
+            _id = int(message.text.split()[1])
+            user = users_db.find_one({"id": _id})
+            products = list(products_db.find({"buyer": _id}))
+            add_time = user['add_time'].strftime("%m-%d-%y %H:%M")
+
+            bot.send_message(message.chat.id, f"id: `{user['id']}`\nname: {user['name']}\nusername: {user['username']}\ncount of products: {len(products)}\nadd time: {add_time}", parse_mode="Markdown")
 
             for product in products:
                 area = areas_db.find_one({"id": product["area"]})
-                msg.reply_text(
-                    f"`{product['id']}` Шиш {product['weight']}г {area['name']} - {product['photo']}\n\n{product['buy_time'].strftime("%m-%d-%y %H:%M")}",
-                    parse_mode=ParseMode.MARKDOWN)
+                bot.send_message(message.chat.id, f"`{product['id']}` Шиш {product['weight']}г {area['name']} - {product['photo']}\n\n{product['buy_time'].strftime("%m-%d-%y %H:%M")}", parse_mode="Markdown")
 
     except Exception as ex:
+        print(ex)
         logging.error(ex)
 
 
-if __name__ == "__main__":
-    app.run()
+bot.infinity_polling()
