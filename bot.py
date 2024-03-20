@@ -31,7 +31,7 @@ def notify(_, msg):
     try:
         logging.info(msg)
 
-        if msg.chat.id == BOT_ADMIN_ID:
+        if msg.from_user.id == BOT_ADMIN_ID:
             users = list(users_db.find({"visible": True}))
 
             if len(users) > 0:
@@ -59,7 +59,7 @@ def users(_, msg):
     try:
         logging.info(msg)
 
-        if msg.chat.id == BOT_ADMIN_ID:
+        if msg.from_user.id == BOT_ADMIN_ID:
             users = users_db.find({"visible": True})
 
             text = "Whitelist"
@@ -78,7 +78,7 @@ def user(_, msg):
     try:
         logging.info(msg)
 
-        if msg.chat.id == BOT_ADMIN_ID:
+        if msg.from_user.id == BOT_ADMIN_ID:
             _id = int(msg.text.split()[1])
             user = users_db.find_one({"id": _id})
             products = list(products_db.find({"buyer": _id}))
@@ -101,7 +101,7 @@ def user(_, msg):
 @app.on_message(filters.command("give", prefixes="/"))
 def give(_, msg):
     try:
-        if msg.chat.id == BOT_ADMIN_ID:
+        if msg.from_user.id == BOT_ADMIN_ID:
             area = int(msg.text.split()[1])
             weight = int(msg.text.split()[2])
             user_id = int(msg.text.split()[3])
@@ -112,8 +112,8 @@ def give(_, msg):
                                    {"$set": {"buyer": user_id, "buy_time": datetime.now(), "visible": False}})
 
             product = products_db.find_one({"_id": product["_id"]})
-
             area = areas_db.find_one({"id": area})
+
             text = f"`id{product['id']}` Шиш {product['weight']}г {area['name']} - {product['photo']}\n\n{product['buy_time'].strftime("%m-%d-%y %H:%M")}"
 
             app.send_message(user_id, text, parse_mode=ParseMode.MARKDOWN)
@@ -128,7 +128,7 @@ def start(_, msg):
     try:
         logging.info(msg)
 
-        if msg.chat.id == BOT_ADMIN_ID:
+        if msg.from_user.id == BOT_ADMIN_ID:
             areas = areas_db.find({"visible": True})
 
             if areas:
@@ -143,7 +143,7 @@ def start(_, msg):
                 msg.reply_text("No areas")
 
         else:
-            user = users_db.find_one({"id": msg.chat.id, "visible": True})
+            user = users_db.find_one({"id": msg.from_user.id, "visible": True})
 
             if user:
                 areas = areas_db.find({"visible": True})
@@ -178,7 +178,7 @@ def area(_, msg):
     try:
         logging.info(msg)
 
-        if msg.chat.id == BOT_ADMIN_ID:
+        if msg.from_user.id == BOT_ADMIN_ID:
             area = int(msg.text.split()[1])
             products = list(products_db.find({"area": area, "visible": True}))
 
@@ -201,24 +201,22 @@ def area(_, msg):
                 msg.reply_text("No products")
 
         else:
-            user = users_db.find_one({"id": msg.chat.id, "visible": True})
+            user = users_db.find_one({"id": msg.from_user.id, "visible": True})
 
             if user:
                 area = int(msg.text.split()[1])
                 products = list(products_db.find({"area": area, "visible": True}))
 
                 if len(products) > 0:
-                    products_weight = []
+                    products_data = {}
 
                     for product in products:
-                        products_weight.append(product["weight"])
-
-                    products_weight = set(products_weight)
+                        products_data[product["weight"]] = product["price"]
 
                     text = "Выберите товар"
 
-                    for weight in products_weight:
-                        text += f"\n`/product {area} {weight}` - Шиш {weight}г"
+                    for product in products_data:
+                        text += f"\n`/product {area} {product}` - Шиш {product}г {products_data[product]}грн"
 
                     msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
 
@@ -234,7 +232,7 @@ def product(_, msg):
     try:
         logging.info(msg)
 
-        if msg.chat.id == BOT_ADMIN_ID:
+        if msg.from_user.id == BOT_ADMIN_ID:
             area = int(msg.text.split()[1])
             weight = int(msg.text.split()[2])
             products = list(products_db.find({"weight": weight, "area": area, "visible": True}))
@@ -248,7 +246,7 @@ def product(_, msg):
                 msg.reply_text("No products")
 
         else:
-            user = users_db.find_one({"id": msg.chat.id, "visible": True})
+            user = users_db.find_one({"id": msg.from_user.id, "visible": True})
 
             if user:
                 area = int(msg.text.split()[1])
@@ -261,21 +259,23 @@ def product(_, msg):
                         f"Шиш {product['weight']}г\nРайон: {area['name']}\nЦена: {product['price']}грн\nБаланс: {user['balance']}")
 
                     if user['balance'] >= product['price']:
-                        users_db.update_one({"id": msg.chat.id}, {"$set": {"balance": user['balance'] - product['price']}})
+                        users_db.update_one({"id": msg.from_user.id},
+                                            {"$set": {"balance": user['balance'] - product['price']}})
 
-                        products_db.update_one({"_id": product['_id']}, {"$set": {"buyer": user['id'], "buy_time": datetime.now(), "visible": False}})
+                        products_db.update_one({"_id": product['_id']}, {
+                            "$set": {"buyer": user['id'], "buy_time": datetime.now(), "visible": False}})
 
-                        product = products_db.find_one({"_id": product["_id"]})
+                        product = products_db.find_one({"_id": product['_id']})
 
-                        area = areas_db.find_one({"id": area})
-                        text = f"`id{product['id']}` Шиш {product['weight']}г {area['name']} - {product['photo']}\n\n{product['buy_time'].strftime("%m-%d-%y %H:%M")}"
+                        text = f"`id{product['id']}` Шиш {product['weight']}г {area['name']} - {product['photo']}\n\n{product['buy_time'].strftime('%m-%d-%y %H:%M')}"
 
-                        app.send_message(msg.chat.id, text, parse_mode=ParseMode.MARKDOWN)
+                        app.send_message(msg.from_user.id, text)
                         app.send_message(BOT_ADMIN_ID, text, parse_mode=ParseMode.MARKDOWN)
 
                     else:
-                        msg.reply_text(f"Оплатите `{product['price'] - user['balance']}`грн на карту `{PAYMENT_CARD}` в течение 20 минут",
-                                       parse_mode=ParseMode.MARKDOWN)
+                        msg.reply_text(
+                            f"Оплатите `{product['price'] - user['balance']}`грн на карту `{PAYMENT_CARD}` в течение 20 минут",
+                            parse_mode=ParseMode.MARKDOWN)
 
                         app.send_message(BOT_ADMIN_ID,
                                          f"Новый заказ от {user['username']}\nШиш {product['weight']}г {product['area']} {product['price'] - user['balance']}грн\n\n`/give {product['area']} {weight} {user['id']}`",
@@ -293,7 +293,7 @@ def me(_, msg):
     try:
         logging.info(msg)
 
-        user = users_db.find_one({"id": msg.chat.id, "visible": True})
+        user = users_db.find_one({"id": msg.from_user.id, "visible": True})
 
         if user:
             products = list(products_db.find({"buyer": user["id"]}).sort("buy_time", 1))
@@ -312,13 +312,12 @@ def me(_, msg):
         logging.error(ex)
 
 
-
 @app.on_message(filters.command("balance", prefixes="/"))
 def balance(_, msg):
     try:
         logging.info(msg)
 
-        if msg.chat.id == BOT_ADMIN_ID:
+        if msg.from_user.id == BOT_ADMIN_ID:
             amount = int(msg.text.split()[1])
             user_id = int(msg.text.split()[2])
 
@@ -329,6 +328,43 @@ def balance(_, msg):
             msg.reply_text(
                 f"id: `{user['id']}`\nname: {user['name']}\nusername: {user['username']}\nbalance: {user['balance']}грн",
                 parse_mode=ParseMode.MARKDOWN)
+
+            app.send_message(user_id, f"Ваш баланс пополнен на {amount}грн\nБаланс: {user['balance']}грн")
+
+    except Exception as ex:
+        logging.error(ex)
+
+
+@app.on_message(filters.command("help", prefixes="/"))
+def help(_, msg):
+    try:
+        logging.info(msg)
+
+        if msg.from_user.id == BOT_ADMIN_ID:
+            text = f"`/me` - Личный кабинет\n`/start` - Получить доступные районы\n`/area n` - Получить доступные товары на районе\n`/product n m` - Перейти к оплате товара\n`/oper` - Позвать опера\n`/help` - Помощь\n`/users` - Получить доступных клиентов\n`/user n` - Получить данные пользователя\n`/give n m i` - Выдать продукт пользователю\n`/balance n m` - Изменить баланс пользователя\n`/notify n` - Уведомление для всех клиентов"
+            msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+
+        else:
+            user = users_db.find_one({"id": msg.from_user.id, "visible": True})
+
+            if user:
+                text = f"`/me` - Личный кабинет\n`/start` - Получить доступные районы\n`/area n` - Получить доступные товары на районе\n`/product n m` - Перейти к оплате товара\n`/oper` - Позвать опера\n`/help` - Помощь"
+                msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+
+    except Exception as ex:
+        logging.error(ex)
+
+
+@app.on_message(filters.command("oper", prefixes="/"))
+def oper(_, msg):
+    try:
+        logging.info(msg)
+
+        user = users_db.find_one({"id": msg.from_user.id, "visible": True})
+
+        if user:
+            app.send_message(BOT_ADMIN_ID, f"Вызов от {user['username']}")
+            msg.reply_text("Запрос отправлен")
 
     except Exception as ex:
         logging.error(ex)
