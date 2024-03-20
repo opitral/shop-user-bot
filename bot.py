@@ -2,8 +2,8 @@ import os
 from datetime import datetime
 
 from pyrogram import Client, filters
-from dotenv import load_dotenv
 from pyrogram.enums import ParseMode
+from dotenv import load_dotenv
 import logging
 import pymongo
 import pyimgur
@@ -15,22 +15,23 @@ TELEGRAM_API_ID = os.getenv("TELEGRAM_API_ID")
 TELEGRAM_API_HASH = os.getenv("TELEGRAM_API_HASH")
 PAYMENT_CARD = os.getenv("PAYMENT_CARD")
 BOT_ADMIN_ID = int(os.getenv("BOT_ADMIN_ID"))
+CLIENT_ID = os.getenv("IMGUR_ID")
+CLIENT_SECRET = os.getenv("IMGUR_SECRET")
+DB_STRING = os.getenv("DB_STRING")
 
 app = Client(TELEGRAM_SESSION, api_id=TELEGRAM_API_ID, api_hash=TELEGRAM_API_HASH)
 
 logging.basicConfig(filename="logs/bot.log", level=logging.INFO)
 
-connection = pymongo.MongoClient("mongodb://localhost:27017/")
+connection = pymongo.MongoClient(DB_STRING)
 db = connection["shop"]
 
 users_db = db["users"]
 areas_db = db["areas"]
 products_db = db["products"]
 
-client_id = os.getenv("IMGUR_ID")
-client_secret = os.getenv("IMGUR_SECRET")
+im = pyimgur.Imgur(CLIENT_ID)
 
-im = pyimgur.Imgur(client_id)
 
 @app.on_message(filters.command("notify", prefixes="/"))
 def notify(_, msg):
