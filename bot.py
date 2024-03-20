@@ -32,6 +32,8 @@ products_db = db["products"]
 
 im = pyimgur.Imgur(CLIENT_ID)
 
+with app:
+    app.send_message(BOT_ADMIN_ID, "бот запущен")
 
 @app.on_message(filters.command("notify", prefixes="/"))
 def notify(_, msg):

@@ -1,5 +1,5 @@
 FROM python:latest
 WORKDIR app/
-COPY src/ .
+COPY . .
 RUN pip install -r requirements.txt
 CMD ["python", "bot.py"]
