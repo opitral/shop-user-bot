@@ -6,6 +6,8 @@ from dotenv import load_dotenv
 from pyrogram.enums import ParseMode
 import logging
 import pymongo
+import pyimgur
+
 
 load_dotenv()
 TELEGRAM_SESSION = os.getenv("TELEGRAM_SESSION")
@@ -25,6 +27,10 @@ users_db = db["users"]
 areas_db = db["areas"]
 products_db = db["products"]
 
+client_id = os.getenv("IMGUR_ID")
+client_secret = os.getenv("IMGUR_SECRET")
+
+im = pyimgur.Imgur(client_id)
 
 @app.on_message(filters.command("notify", prefixes="/"))
 def notify(_, msg):
@@ -39,7 +45,7 @@ def notify(_, msg):
                 ok_msgs = 0
                 for user in users:
                     try:
-                        app.send_message(user["id"], message)
+                        app.send_message(user["id"], message, parse_mode=ParseMode.MARKDOWN)
                         ok_msgs += 1
 
                     except:
@@ -91,7 +97,7 @@ def user(_, msg):
             for product in products:
                 area = areas_db.find_one({"id": product["area"]})
                 msg.reply_text(
-                    f"`id{product['id']}` Шиш {product['weight']}г {area['name']} - {product['photo']}\n\n{product['buy_time'].strftime("%m-%d-%y %H:%M")}",
+                    f"Шиш {product['weight']}г {area['name']} - {product['photo']}\n\n{product['buy_time'].strftime("%m-%d-%y %H:%M")}",
                     parse_mode=ParseMode.MARKDOWN)
 
     except Exception as ex:
@@ -114,7 +120,7 @@ def give(_, msg):
             product = products_db.find_one({"_id": product["_id"]})
             area = areas_db.find_one({"id": area})
 
-            text = f"`id{product['id']}` Шиш {product['weight']}г {area['name']} - {product['photo']}\n\n{product['buy_time'].strftime("%m-%d-%y %H:%M")}"
+            text = f"Шиш {product['weight']}г {area['name']} - {product['photo']}\n\n{product['buy_time'].strftime("%m-%d-%y %H:%M")}"
 
             app.send_message(user_id, text, parse_mode=ParseMode.MARKDOWN)
             app.send_message(BOT_ADMIN_ID, text, parse_mode=ParseMode.MARKDOWN)
@@ -267,7 +273,7 @@ def product(_, msg):
 
                         product = products_db.find_one({"_id": product['_id']})
 
-                        text = f"`id{product['id']}` Шиш {product['weight']}г {area['name']} - {product['photo']}\n\n{product['buy_time'].strftime('%m-%d-%y %H:%M')}"
+                        text = f"Шиш {product['weight']}г {area['name']} - {product['photo']}\n\n{product['buy_time'].strftime('%m-%d-%y %H:%M')}"
 
                         app.send_message(msg.from_user.id, text)
                         app.send_message(BOT_ADMIN_ID, text, parse_mode=ParseMode.MARKDOWN)
@@ -305,7 +311,7 @@ def me(_, msg):
             for product in products:
                 area = areas_db.find_one({"id": product["area"]})
                 msg.reply_text(
-                    f"`id{product['id']}` Шиш {product['weight']}г {area['name']} - {product['photo']}\n\n{product['buy_time'].strftime("%m-%d-%y %H:%M")}",
+                    f"Шиш {product['weight']}г {area['name']} - {product['photo']}\n\n{product['buy_time'].strftime("%m-%d-%y %H:%M")}",
                     parse_mode=ParseMode.MARKDOWN)
 
     except Exception as ex:
@@ -365,6 +371,44 @@ def oper(_, msg):
         if user:
             app.send_message(BOT_ADMIN_ID, f"Вызов от {user['username']}")
             msg.reply_text("Запрос отправлен")
+
+    except Exception as ex:
+        logging.error(ex)
+
+
+@app.on_message(filters.photo)
+def photo(_, msg):
+    try:
+        logging.info(msg)
+
+        if msg.from_user.id == BOT_ADMIN_ID:
+            photo = msg.download()
+            uploaded_image = im.upload_image(photo)
+            os.remove(photo)
+
+            weight = int(msg.caption.split()[0])
+            area = int(msg.caption.split()[1])
+            price = int(msg.caption.split()[2])
+
+            product = products_db.insert_one(
+                {
+                    "weight": weight,
+                    "area": area,
+                    "price": price,
+                    "photo": uploaded_image.link,
+                    "add_time": datetime.now(),
+                    "visible": True
+                }
+            )
+
+            product = products_db.find_one({"_id": product.inserted_id})
+            area = areas_db.find_one({"id": product['area']})
+
+            msg.reply_text("Товар добавлен")
+
+            msg.reply_text(
+                f"Шиш {product['weight']}г {area['name']} - {product['photo']}\n\n{product['add_time'].strftime("%m-%d-%y %H:%M")}",
+                parse_mode=ParseMode.MARKDOWN)
 
     except Exception as ex:
         logging.error(ex)

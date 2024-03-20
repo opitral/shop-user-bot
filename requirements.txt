@@ -3,6 +3,7 @@ charset-normalizer==3.3.2
 dnspython==2.6.1
 idna==3.6
 pyaes==1.6.1
+pyimgur==0.6.0
 pymongo==4.6.2
 Pyrogram==2.0.106
 PySocks==1.7.1
