@@ -8,20 +8,19 @@ import logging
 import pymongo
 import pyimgur
 
-
 load_dotenv()
 TELEGRAM_SESSION = os.getenv("TELEGRAM_SESSION")
 TELEGRAM_API_ID = os.getenv("TELEGRAM_API_ID")
 TELEGRAM_API_HASH = os.getenv("TELEGRAM_API_HASH")
 PAYMENT_CARD = os.getenv("PAYMENT_CARD")
-BOT_ADMIN_ID = int(os.getenv("BOT_ADMIN_ID"))
+ADMIN_ID = int(os.getenv("ADMIN_ID"))
 CLIENT_ID = os.getenv("IMGUR_ID")
 CLIENT_SECRET = os.getenv("IMGUR_SECRET")
 DB_STRING = os.getenv("DB_STRING")
 
 app = Client(TELEGRAM_SESSION, api_id=TELEGRAM_API_ID, api_hash=TELEGRAM_API_HASH)
 
-logging.basicConfig(filename="logs/bot.log", level=logging.INFO)
+logging.basicConfig(filename="bot.log", level=logging.INFO)
 
 connection = pymongo.MongoClient(DB_STRING)
 db = connection["shop"]
@@ -33,14 +32,15 @@ products_db = db["products"]
 im = pyimgur.Imgur(CLIENT_ID)
 
 with app:
-    app.send_message(BOT_ADMIN_ID, "бот запущен")
+    app.send_message(ADMIN_ID, "бот запущен")
+
 
 @app.on_message(filters.command("notify", prefixes="/"))
 def notify(_, msg):
     try:
         logging.info(msg)
 
-        if msg.from_user.id == BOT_ADMIN_ID:
+        if msg.from_user.id == ADMIN_ID:
             users = list(users_db.find({"visible": True}))
 
             if len(users) > 0:
@@ -68,7 +68,7 @@ def users(_, msg):
     try:
         logging.info(msg)
 
-        if msg.from_user.id == BOT_ADMIN_ID:
+        if msg.from_user.id == ADMIN_ID:
             users = users_db.find({"visible": True})
 
             text = "Whitelist"
@@ -87,7 +87,7 @@ def user(_, msg):
     try:
         logging.info(msg)
 
-        if msg.from_user.id == BOT_ADMIN_ID:
+        if msg.from_user.id == ADMIN_ID:
             _id = int(msg.text.split()[1])
             user = users_db.find_one({"id": _id})
             products = list(products_db.find({"buyer": _id}))
@@ -99,9 +99,7 @@ def user(_, msg):
 
             for product in products:
                 area = areas_db.find_one({"id": product["area"]})
-                msg.reply_text(
-                    f"Шиш {product['weight']}г {area['name']} - {product['photo']}\n\n{product['buy_time'].strftime("%m-%d-%y %H:%M")}",
-                    parse_mode=ParseMode.MARKDOWN)
+                msg.reply_text(f"Шиш {product['weight']}г {area['name']} - {product['photo']}\n\n{product['buy_time'].strftime('%m-%d-%y %H:%M')}", parse_mode=ParseMode.MARKDOWN)
 
     except Exception as ex:
         logging.error(ex)
@@ -110,7 +108,7 @@ def user(_, msg):
 @app.on_message(filters.command("give", prefixes="/"))
 def give(_, msg):
     try:
-        if msg.from_user.id == BOT_ADMIN_ID:
+        if msg.from_user.id == ADMIN_ID:
             area = int(msg.text.split()[1])
             weight = int(msg.text.split()[2])
             user_id = int(msg.text.split()[3])
@@ -123,10 +121,10 @@ def give(_, msg):
             product = products_db.find_one({"_id": product["_id"]})
             area = areas_db.find_one({"id": area})
 
-            text = f"Шиш {product['weight']}г {area['name']} - {product['photo']}\n\n{product['buy_time'].strftime("%m-%d-%y %H:%M")}"
+            text = f"Шиш {product['weight']}г {area['name']} - {product['photo']}\n\n{product['buy_time'].strftime('%m-%d-%y %H:%M')}"
 
             app.send_message(user_id, text, parse_mode=ParseMode.MARKDOWN)
-            app.send_message(BOT_ADMIN_ID, text, parse_mode=ParseMode.MARKDOWN)
+            app.send_message(ADMIN_ID, text, parse_mode=ParseMode.MARKDOWN)
 
     except Exception as ex:
         logging.error(ex)
@@ -137,10 +135,10 @@ def start(_, msg):
     try:
         logging.info(msg)
 
-        if msg.from_user.id == BOT_ADMIN_ID:
-            areas = areas_db.find({"visible": True})
+        if msg.from_user.id == ADMIN_ID:
+            areas = list(areas_db.find({"visible": True}))
 
-            if areas:
+            if len(areas) > 0:
                 text = "Доступные районы"
 
                 for area in areas:
@@ -174,7 +172,7 @@ def start(_, msg):
                         "name": msg.from_user.first_name,
                         "username": "@" + msg.from_user.username,
                         "add_time": datetime.now(),
-                        "visible": False
+                        "visible": True
                     }
                 )
 
@@ -187,7 +185,7 @@ def area(_, msg):
     try:
         logging.info(msg)
 
-        if msg.from_user.id == BOT_ADMIN_ID:
+        if msg.from_user.id == ADMIN_ID:
             area = int(msg.text.split()[1])
             products = list(products_db.find({"area": area, "visible": True}))
 
@@ -241,7 +239,7 @@ def product(_, msg):
     try:
         logging.info(msg)
 
-        if msg.from_user.id == BOT_ADMIN_ID:
+        if msg.from_user.id == ADMIN_ID:
             area = int(msg.text.split()[1])
             weight = int(msg.text.split()[2])
             products = list(products_db.find({"weight": weight, "area": area, "visible": True}))
@@ -279,14 +277,14 @@ def product(_, msg):
                         text = f"Шиш {product['weight']}г {area['name']} - {product['photo']}\n\n{product['buy_time'].strftime('%m-%d-%y %H:%M')}"
 
                         app.send_message(msg.from_user.id, text)
-                        app.send_message(BOT_ADMIN_ID, text, parse_mode=ParseMode.MARKDOWN)
+                        app.send_message(ADMIN_ID, text, parse_mode=ParseMode.MARKDOWN)
 
                     else:
                         msg.reply_text(
                             f"Оплатите `{product['price'] - user['balance']}`грн на карту `{PAYMENT_CARD}` в течение 20 минут",
                             parse_mode=ParseMode.MARKDOWN)
 
-                        app.send_message(BOT_ADMIN_ID,
+                        app.send_message(ADMIN_ID,
                                          f"Новый заказ от {user['username']}\nШиш {product['weight']}г {product['area']} {product['price'] - user['balance']}грн\n\n`/give {product['area']} {weight} {user['id']}`",
                                          parse_mode=ParseMode.MARKDOWN)
 
@@ -314,7 +312,7 @@ def me(_, msg):
             for product in products:
                 area = areas_db.find_one({"id": product["area"]})
                 msg.reply_text(
-                    f"Шиш {product['weight']}г {area['name']} - {product['photo']}\n\n{product['buy_time'].strftime("%m-%d-%y %H:%M")}",
+                    f"Шиш {product['weight']}г {area['name']} - {product['photo']}\n\n{product['buy_time'].strftime('%m-%d-%y %H:%M')}",
                     parse_mode=ParseMode.MARKDOWN)
 
     except Exception as ex:
@@ -326,7 +324,7 @@ def balance(_, msg):
     try:
         logging.info(msg)
 
-        if msg.from_user.id == BOT_ADMIN_ID:
+        if msg.from_user.id == ADMIN_ID:
             amount = int(msg.text.split()[1])
             user_id = int(msg.text.split()[2])
 
@@ -349,7 +347,7 @@ def help(_, msg):
     try:
         logging.info(msg)
 
-        if msg.from_user.id == BOT_ADMIN_ID:
+        if msg.from_user.id == ADMIN_ID:
             text = f"`/me` - Личный кабинет\n`/start` - Получить доступные районы\n`/area n` - Получить доступные товары на районе\n`/product n m` - Перейти к оплате товара\n`/oper` - Позвать опера\n`/help` - Помощь\n`/users` - Получить доступных клиентов\n`/user n` - Получить данные пользователя\n`/give n m i` - Выдать продукт пользователю\n`/balance n m` - Изменить баланс пользователя\n`/notify n` - Уведомление для всех клиентов"
             msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
 
@@ -372,7 +370,7 @@ def oper(_, msg):
         user = users_db.find_one({"id": msg.from_user.id, "visible": True})
 
         if user:
-            app.send_message(BOT_ADMIN_ID, f"Вызов от {user['username']}")
+            app.send_message(ADMIN_ID, f"Вызов от {user['username']}")
             msg.reply_text("Запрос отправлен")
 
     except Exception as ex:
@@ -384,7 +382,7 @@ def photo(_, msg):
     try:
         logging.info(msg)
 
-        if msg.from_user.id == BOT_ADMIN_ID:
+        if msg.from_user.id == ADMIN_ID:
             photo = msg.download()
             uploaded_image = im.upload_image(photo)
             os.remove(photo)
@@ -410,7 +408,7 @@ def photo(_, msg):
             msg.reply_text("Товар добавлен")
 
             msg.reply_text(
-                f"Шиш {product['weight']}г {area['name']} - {product['photo']}\n\n{product['add_time'].strftime("%m-%d-%y %H:%M")}",
+                f"Шиш {product['weight']}г {area['name']} - {product['photo']}\n\n{product['add_time'].strftime('%m-%d-%y %H:%M')}",
                 parse_mode=ParseMode.MARKDOWN)
 
     except Exception as ex:
